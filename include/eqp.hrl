@@ -11,7 +11,7 @@
 -define(e(ErrCode, Reason), {err, {ErrCode, ?p(Reason)}}).
 
 %% Logs
--define(stime, dh_date:format("Y-m-d H:i:s",{date(),time()})).
+-define(stime, eqp_dh_date:format("Y-m-d H:i:s",{date(),time()})).
 -define(INF(Str, Term), io:format("~p EQP: ~p:~p ~p ~100P~n", [?stime, ?MODULE, ?LINE, Str, Term, 300])).
 
 % NOW time in seconds & milliseconds

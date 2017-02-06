@@ -49,7 +49,10 @@ init(Args = #{qp_name := QPName, start := MFA1, stop := MFA2}) ->
         adv     => 1,             %% Advance connections
         ini     => [],            %% Pids spawned for init conns
         start   => MFA1,          %% MFA to start sub_worker process
-        stop    => MFA2           %% MFA to stop sub_worker process
+        stop    => MFA2,          %% MFA to stop sub_worker process
+        %% stat
+        rcount  => 0,             %% request count
+        rate    => eqp_mavg:new() %% mavg of requests
         },
   {ok, try_advance(S, ?mnow)}.
 
@@ -82,7 +85,8 @@ handle_call(_Req, _From, S)       -> {reply, ?e(unknown_command), S, 0}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 stat_(S = #{in := In, out := Out}) ->
-  Stat = S#{in := length(In), out := length(Out)},
+  Rate = maps:get(rate, S, eqp_mavg:new()),
+  Stat = S#{in := length(In), out := length(Out), rate => eqp_mavg:rate(Rate)},
   Reply = {ok, Stat},
   {reply, Reply, S, 0}.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -97,7 +101,8 @@ req_(S = #{in := In, out := Out}, From, Args) ->
   Timeout = 5000,
   Until = ?mnow + Timeout,
   NewOut = ordsets:add_element({Until, req, From}, Out),
-  {noreply, S#{in := NewIn, out := NewOut}, 0}.
+  Rcount = maps:get(rcount, S, 0), Rate = maps:get(rate, S, eqp_mavg:new()),
+  {noreply, S#{in := NewIn, out := NewOut, rcount => Rcount+1, rate => eqp_mavg:event(Rate)}, 0}.
 
 %% Answer
 ans_(S = #{out := Out}, AnswerPack) ->
@@ -138,7 +143,7 @@ stp_(S = #{con := Cs, fre := Fre}, Conn) ->
 
 
 %% Manage request timeout and return connects timeouts
-timeout_(S = #{con := DebugConns, fre := Fre}) ->
+timeout_(S) ->
   Now = ?mnow,
 
   %% Manage in queue
@@ -181,7 +186,6 @@ try_send(S = #{in := In, fre := [C|RestFree], con := Cs, ini := Ini}, Now) ->
   QLen     = length(In),
   PackLen  = trunc(QLen/PoolSize)+1,
   {P, RIn} = lists:split(?IF(PackLen =< ?MAX_PACK_SIZE, PackLen, ?MAX_PACK_SIZE), In),
-  ?INF("AAAAA", {P, RIn}),
   %% Send pack
   gen_server:cast(C, {pack, P}),
   NewS = S#{in := RIn, fre := RestFree},
@@ -231,5 +235,4 @@ start_worker(S = #{qp_name := QPName, start := MFA1, stop := MFA2}, WorkersToAdd
   end,
   Start(Start, S, WorkersToAddNum).
   
-
 

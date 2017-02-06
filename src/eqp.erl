@@ -6,7 +6,9 @@
     t/1, 
     create/2,
     delete/1,
+    list/0,
     stat/1,
+    stat/0,
 
     req/2,
 
@@ -58,8 +60,13 @@ delete(QPName) ->
     Else -> Else
   end.
 
+%
+list() ->
+  [Name || {Name,_,_,_} <- supervisor:which_children(eqp_sup)].
 
 %
+stat() -> 
+  list().
 stat(QPName) ->
   gen_server:call(QPName, stat).
 
@@ -73,5 +80,4 @@ req(QPName, Req) ->
 update(_QPName, max_conns,  _Num) -> ok;
 update(_QPName, min_conns,  _Num) -> ok;
 update(_QPName, free_conns, _Num) -> ok.
-
 

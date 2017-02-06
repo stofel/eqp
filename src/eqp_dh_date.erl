@@ -15,7 +15,7 @@
 
 %% MW: Added support for ISO8601 and "Y-M-D H:I:S"
 
--module(dh_date).
+-module(eqp_dh_date).
 -author("Dale Harvey <dale@hypernumbers.com>").
 -author("Marc Worrell <marc@worrell.nl>").
 
