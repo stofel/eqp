@@ -98,7 +98,7 @@ stat_(S = #{in := In, out := Out}) ->
 %% Request
 req_(S = #{in := In, out := Out}, From, Args) ->
   NewIn  = [{From, Args}|In],
-  Timeout = 5000,
+  Timeout = 3000,
   Until = ?mnow + Timeout,
   NewOut = ordsets:add_element({Until, req, From}, Out),
   Rcount = maps:get(rcount, S, 0), Rate = maps:get(rate, S, eqp_mavg:new()),
