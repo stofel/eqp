@@ -228,9 +228,9 @@ start_worker(S = #{qp_name := QPName, start := MFA1, stop := MFA2}, WorkersToAdd
     end,
   Start = fun
     (Fu, Acc = #{out := Out, ini := Ini}, N) when N > 0 ->
-        Pid     = spawn(StartWorkerFun),
-        NewOut  = ordsets:add_element({Now + ?INIT_TIMEOUT, adv, Pid}, Out),
-        Fu(Fu, Acc#{out := NewOut, ini := [Pid|Ini]}, N-1);
+        IniPid  = spawn(StartWorkerFun),
+        NewOut  = ordsets:add_element({Now + ?INIT_TIMEOUT, adv, IniPid}, Out),
+        Fu(Fu, Acc#{out := NewOut, ini := [IniPid|Ini]}, N-1);
     (_F, Acc, _) -> Acc
   end,
   Start(Start, S, WorkersToAddNum).
