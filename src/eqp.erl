@@ -15,6 +15,8 @@
     update/3
   ]).
 
+-type err() :: {err, {Code::atom(), Reason::binary}}.
+-export_type([err/0]).
 
 t(1) -> 
   % {ok, C} = epgsql:connect("localhost", "general", "Maf6eepiecai", [{database, "puzzles"}, {timeout, 4000}]),
@@ -40,6 +42,7 @@ t(3) ->
 
 
 %
+-spec create(QPName::atom(), Args::map()) -> ok | err().
 create(QPName, Args) -> 
   Child = #{id        => QPName,
             start     => {eqp_server, start_link, [QPName, Args]},
@@ -48,7 +51,7 @@ create(QPName, Args) ->
             type      => worker,
             modules   => [eqp_server]},
   case supervisor:start_child(eqp_sup, Child) of
-    {ok, _Pid} -> {ok, QPName};
+    {ok, _Pid} -> ok;
     Else       -> Else
   end.
 
