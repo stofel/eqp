@@ -76,7 +76,12 @@ stat(QPName) ->
 
 %
 req(QPName, Req) -> 
-  gen_server:call(QPName, {req, Req}).
+  try gen_server:call(QPName, {req, Req}, 8000)
+  catch
+    E:R -> 
+      ?INF("req err", {E,R}), 
+      ?e(timeout)
+  end.
 
 
 
