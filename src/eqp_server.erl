@@ -98,7 +98,7 @@ stat_(S = #{in := In, out := Out}) ->
 %% Request
 req_(S = #{in := In, out := Out}, From, Args) ->
   NewIn  = [{From, Args}|In],
-  Timeout = 3000,
+  Timeout = 5000,
   Until = ?mnow + Timeout,
   NewOut = ordsets:add_element({Until, req, From}, Out),
   Rcount = maps:get(rcount, S, 0), Rate = maps:get(rate, S, eqp_mavg:new()),
@@ -106,10 +106,16 @@ req_(S = #{in := In, out := Out}, From, Args) ->
 
 %% Answer
 ans_(S = #{out := Out}, AnswerPack) ->
-  NewOut = [case lists:keytake(From, 3, Out) of
-    {value, _, RestOut} -> gen_server:reply(From, Ans), RestOut;
-    false -> do_nothing, Out 
-  end || {From, Ans} <- AnswerPack],
+  NewOutFun = fun
+    (Fu, [{From, Ans}|Rest], OutAcc) -> 
+      case lists:keytake(From, 3, OutAcc) of
+        {value, _, NewOutAcc} -> gen_server:reply(From, Ans), Fu(Fu, Rest, NewOutAcc);
+        false -> Fu(Fu, Rest, OutAcc)
+      end;
+    (_F, [], OutAcc) -> OutAcc
+  end,
+  NewOut = NewOutFun(NewOutFun, AnswerPack, Out),
+
   {noreply, S#{out := NewOut}, 0}.
 
 
@@ -119,7 +125,7 @@ ret_(S = #{out := Out, con := Cs, fre := Fre}, Conn) ->
     {value, _, RestOut} -> RestOut;
     false -> Out
   end,
-  NewFre = case lists:member(Conn, Cs) of true -> [Conn|Fre]; false -> Fre end,
+  NewFre = case lists:member(Conn, Cs) of true -> lists:append(Fre, [Conn]); false -> Fre end,
   {noreply, S#{out := NewOut, fre := NewFre}, 0}.
 
 
@@ -143,7 +149,7 @@ stp_(S = #{con := Cs, fre := Fre}, Conn) ->
 
 
 %% Manage request timeout and return connects timeouts
-timeout_(S) ->
+timeout_(S = #{fre := Fre}) ->
   Now = ?mnow,
 
   %% Manage in queue
@@ -157,18 +163,23 @@ timeout_(S) ->
   OutQFun = fun
     %% Timeouted request
     (Fu, AccS = #{out := [{U,req,From}|Rest], in := I}) when U =< Now ->
+        ?INF("timeout_req", From),
         gen_server:reply(From, timeout),
         Fu(Fu, AccS#{out := Rest, in := lists:keydelete(From, 1, I)});
     %% Timeouted connection
     (Fu, AccS = #{out := [{U,con,Conn}|Rest], con := Cs}) when U =< Now ->
+        ?INF("timeout_conn", Conn),
         Fu(Fu, AccS#{out := Rest, con := lists:delete(Conn, Cs)});
     %% Timeouted advance connection
     (Fu, AccS = #{out := [{U,adv,Conn}|Rest], ini := Ini}) when U =< Now ->
+        ?INF("timeout_conn", Rest),
         Fu(Fu, AccS#{out := Rest, ini := lists:delete(Conn, Ini)});
-    (_F, AccS) -> InQFun(InQFun, AccS)
+    (_F, AccS = #{out := Out}) -> 
+        %?INF("timeout_conn", Out),
+        InQFun(InQFun, AccS)
   end,
 
-  %?INF("timeout", {DebugConns, Fre}),
+  %?INF("timeout", Fre),
   case OutQFun(OutQFun, S) of
      NewS = #{out := [{Until,_,_}|_]} -> {noreply, NewS, Until - Now};
      NewS                             -> {noreply, NewS, 100*1000}
@@ -187,7 +198,7 @@ try_send(S = #{in := In, fre := [C|RestFree], con := Cs, ini := Ini}, Now) ->
   PackLen  = trunc(QLen/PoolSize)+1,
   {P, RIn} = lists:split(?IF(PackLen =< ?MAX_PACK_SIZE, PackLen, ?MAX_PACK_SIZE), In),
   %% Send pack
-  gen_server:cast(C, {pack, P}),
+  Res = gen_server:cast(C, {pack, P}),
   NewS = S#{in := RIn, fre := RestFree},
   ?IF(RIn == [], try_advance(NewS, Now),
     ?IF(RestFree == [], try_advance(NewS, Now), try_send(NewS, Now))).
