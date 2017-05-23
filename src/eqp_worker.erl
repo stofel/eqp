@@ -80,6 +80,9 @@ timeout_(S = #{pack := []}) ->
 timeout_(S = #{pack := Pack, qp_name := QPName, conn := C}) ->
   %% Do pack and send answers to QPName
   SendFun = fun
+    (Fu, [{From, {Req, Params}}|RestPack], AnswerAcc) ->
+        Answer = epgsql:equery(C, Req, Params),
+        Fu(Fu, RestPack, [{From, Answer}|AnswerAcc]);
     (Fu, [{From, Req}|RestPack], AnswerAcc) ->
         Answer = epgsql:squery(C, Req),
         Fu(Fu, RestPack, [{From, Answer}|AnswerAcc]);
