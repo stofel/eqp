@@ -44,9 +44,9 @@ init(Args = #{qp_name := QPName, start := MFA1, stop := MFA2}) ->
         %% Poll
         con     => [],            %% Connections
         fre     => [],            %% Free conns in pool
-        min     => 2,             %% Min connections
-        max     => 5,             %% Max connections
-        adv     => 1,             %% Advance connections
+        min     => maps:get(min, Args, 2),  %% Min connections
+        max     => maps:get(max, Args, 5),  %% Max connections
+        adv     => maps:get(adv, Args, 1),  %% Advance connections
         ini     => [],            %% Pids spawned for init conns
         start   => MFA1,          %% MFA to start sub_worker process
         stop    => MFA2,          %% MFA to stop sub_worker process
