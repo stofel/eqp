@@ -201,7 +201,10 @@ try_send(S = #{in := In, fre := [C|RestFree], con := Cs, ini := Ini}, Now) ->
   Res = gen_server:cast(C, {pack, P}),
   NewS = S#{in := RIn, fre := RestFree},
   ?IF(RIn == [], try_advance(NewS, Now),
-    ?IF(RestFree == [], try_advance(NewS, Now), try_send(NewS, Now))).
+    ?IF(RestFree == [], try_advance(NewS, Now), try_send(NewS, Now)));
+%
+try_send(S = #{fre := []}, Now) ->
+  try_advance(S, Now).
  
 
 %%
