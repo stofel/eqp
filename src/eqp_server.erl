@@ -125,7 +125,7 @@ ret_(S = #{out := Out, con := Cs, fre := Fre}, Conn) ->
     {value, _, RestOut} -> RestOut;
     false -> Out
   end,
-  NewFre = case lists:member(Conn, Cs) of true -> lists:append(Fre, [Conn]); false -> Fre end,
+  NewFre = case lists:member(Conn, Cs) of true -> [Conn|Fre]; false -> Fre end,
   {noreply, S#{out := NewOut, fre := NewFre}, 0}.
 
 
@@ -149,7 +149,7 @@ stp_(S = #{con := Cs, fre := Fre}, Conn) ->
 
 
 %% Manage request timeout and return connects timeouts
-timeout_(S = #{fre := Fre}) ->
+timeout_(S) ->
   Now = ?mnow,
 
   %% Manage in queue
@@ -174,7 +174,7 @@ timeout_(S = #{fre := Fre}) ->
     (Fu, AccS = #{out := [{U,adv,Conn}|Rest], ini := Ini}) when U =< Now ->
         ?INF("timeout_conn", Rest),
         Fu(Fu, AccS#{out := Rest, ini := lists:delete(Conn, Ini)});
-    (_F, AccS = #{out := Out}) -> 
+    (_F, AccS) -> 
         %?INF("timeout_conn", Out),
         InQFun(InQFun, AccS)
   end,
@@ -198,7 +198,7 @@ try_send(S = #{in := In, fre := [C|RestFree], con := Cs, ini := Ini}, Now) ->
   PackLen  = trunc(QLen/PoolSize)+1,
   {P, RIn} = lists:split(?IF(PackLen =< ?MAX_PACK_SIZE, PackLen, ?MAX_PACK_SIZE), In),
   %% Send pack
-  Res = gen_server:cast(C, {pack, P}),
+  gen_server:cast(C, {pack, P}),
   NewS = S#{in := RIn, fre := RestFree},
   ?IF(RIn == [], try_advance(NewS, Now),
     ?IF(RestFree == [], try_advance(NewS, Now), try_send(NewS, Now)));
