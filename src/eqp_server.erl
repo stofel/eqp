@@ -154,8 +154,8 @@ timeout_(S) ->
 
   %% Manage in queue
   InQFun = fun
-    (_F, AccS = #{in := []}) -> try_advance(AccS, Now); 
-    (Fu, AccS)               -> Fu(Fu, try_send(AccS, Now))
+    (_F, AccS = #{in  := []}) -> try_advance(AccS, Now); 
+    (Fu, AccS)                -> try_send(AccS, Now)
   end,
 
 
@@ -175,7 +175,6 @@ timeout_(S) ->
         ?INF("timeout_conn", Rest),
         Fu(Fu, AccS#{out := Rest, ini := lists:delete(Conn, Ini)});
     (_F, AccS) -> 
-        %?INF("timeout_conn", Out),
         InQFun(InQFun, AccS)
   end,
 
