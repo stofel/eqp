@@ -68,18 +68,20 @@ code_change(_OldVersion, State, _Extra) ->
 %% Gen Server api
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% infos
-handle_info(timeout, State)       -> timeout_(State);
-handle_info(Msg, S)               -> ?INF("Unk msg:", Msg), {noreply, S, 0}.
-%% casts
-handle_cast({ret, Conn}, S)       -> ret_(S, Conn);
-handle_cast({ret, From, Conn}, S) -> ret_(S, From, Conn);
-handle_cast({ans, Ans}, S)        -> ans_(S, Ans);
-handle_cast({stp, From}, S)       -> stp_(S, From);
-handle_cast(_Req, S)              -> ?INF("Unknown cast", _Req), {noreply, S, 0}.
-%% calls                           
-handle_call({req, Args}, From, S) -> req_(S, From, Args);
-handle_call(stat, _From, S)       -> stat_(S);
-handle_call(_Req, _From, S)       -> {reply, ?e(unknown_command), S, 0}.
+handle_info(timeout, State)         -> timeout_(State);
+handle_info(Msg, S)                 -> ?INF("Unk msg:", Msg), {noreply, S, 0}.
+%% casts                          
+handle_cast({ans_ret, Conn, A}, S)  -> ans_ret_(S, Conn, A);
+handle_cast({ans, Ans}, S)          -> ans_(S, Ans);
+handle_cast({ans_stp, Conn, A}, S)  -> ans_stp_(S, Conn, A);
+handle_cast({ret, From, Conn}, S)   -> ret_(S, From, Conn);
+handle_cast({ret, Conn}, S)         -> ret_(S, Conn);
+handle_cast({stp, Conn}, S)         -> stp_(S, Conn);
+handle_cast(_Req, S)                -> ?INF("Unknown cast", _Req), {noreply, S, 0}.
+%% calls                            
+handle_call({req, Args}, From, S)   -> req_(S, From, Args);
+handle_call(stat, _From, S)         -> stat_(S);
+handle_call(_Req, _From, S)         -> {reply, ?e(unknown_command), S, 0}.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -119,6 +121,45 @@ ans_(S = #{out := Out}, AnswerPack) ->
   {noreply, S#{out := NewOut}, 0}.
 
 
+%% Answer and return connection from work
+ans_ret_(S = #{out := Out, con := Cs, fre := Fre}, Conn, AnswerPack) ->
+  NewOutFun = fun
+    (Fu, [{From, Ans}|Rest], OutAcc) -> 
+      case lists:keytake(From, 3, OutAcc) of
+        {value, _, NewOutAcc} -> gen_server:reply(From, Ans), Fu(Fu, Rest, NewOutAcc);
+        false -> Fu(Fu, Rest, OutAcc)
+      end;
+    (_F, [], OutAcc) ->
+      case lists:keytake(Conn, 3, OutAcc) of
+        {value, _, RestOut} -> RestOut;
+        false -> OutAcc
+      end
+  end,
+  NewOut = NewOutFun(NewOutFun, AnswerPack, Out),
+  NewFre = case lists:member(Conn, Cs) of true -> [Conn|Fre]; false -> Fre end,
+  {noreply, S#{out := NewOut, fre := NewFre}, 0}.
+
+
+%% Answer and clean stoped worker
+ans_stp_(S = #{out := Out, con := Cs}, Conn, AnswerPack) ->
+  NewOutFun = fun
+    (Fu, [{From, Ans}|Rest], OutAcc) -> 
+      case lists:keytake(From, 3, OutAcc) of
+        {value, _, NewOutAcc} -> gen_server:reply(From, Ans), Fu(Fu, Rest, NewOutAcc);
+        false -> Fu(Fu, Rest, OutAcc)
+      end;
+    (_F, [], OutAcc) ->
+      case lists:keytake(Conn, 3, OutAcc) of
+        {value, _, RestOut} -> RestOut;
+        false -> OutAcc
+      end
+  end,
+  NewOut = NewOutFun(NewOutFun, AnswerPack, Out),
+  NewCs  = lists:delete(Conn, Cs),
+  unlink(Conn),
+  {noreply, S#{out := NewOut, con := NewCs}, 0}.
+
+
 %% Return connection from work
 ret_(S = #{out := Out, con := Cs, fre := Fre}, Conn) -> 
   NewOut = case lists:keytake(Conn, 3, Out) of 
@@ -143,8 +184,10 @@ ret_(S = #{out := Out, con := Cs, ini := Ini, fre := Fre}, From, Conn) ->
 
 %% Stop connection due rotate time
 stp_(S = #{con := Cs, fre := Fre}, Conn) ->
-  %% TODO do some thing with race
+  %% TODO delete from queues
+  unlink(Conn),
   {noreply, S#{con := lists:delete(Conn, Cs), fre := lists:delete(Conn, Fre)}, 0}.
+
 
 
 
@@ -209,17 +252,18 @@ try_send(S = #{fre := []}, Now) ->
 
 %%
 %% 2. if need advance new connections
-try_advance(S = #{ini := Ini, con := Cs,  fre := Fre, 
+try_advance(S = #{ini := Ini, con := Cs,  fre := Fre,
                   min := Min, max := Max, adv := Adv}, Now) ->
+  IniLen   = length(Ini),
   PoolSize = length(Cs) + length(Ini),
+  FreLen   = length(Fre) + IniLen,
   ZerroFun = fun(V) when V >= 0 -> V; (_) -> 0 end, 
   % Min conns to be started
   MinMin  = ZerroFun(Min - PoolSize), 
   % Max conns to be started
-  MinFree = ZerroFun(Adv - length(Fre)),
+  MinFree = ZerroFun(Adv - FreLen),
   MinMax  = ZerroFun(Max - PoolSize),
   MinAdv = min(MinFree, MinMax),
-  
   % Start max possible connections
   start_worker(S, _WorkersToAddNum = max(MinAdv, MinMin), Now).
  
