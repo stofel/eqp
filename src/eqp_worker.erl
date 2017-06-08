@@ -103,5 +103,5 @@ timeout_(S = #{pack := Pack, qp_name := QPName, conn := C, count := Count, until
   end.
 
 stop_or_not(Count, Until) ->
-  (?now - Until < 0) or (Count > 100000).
+  (?now - Until > 0) or (Count > 100000).
 
