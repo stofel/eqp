@@ -20,7 +20,6 @@
 
 
 init(_Args = #{qp_name := QPName, start := {M,F,A}, stop := MFA2}) ->
-  ?INF("init QP worker", {QPName, M,F,A}),
   %process_flag(trap_exit, true),
   case apply(M,F,A) of
     {ok, C} ->
