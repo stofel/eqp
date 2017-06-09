@@ -156,7 +156,6 @@ ans_stp_(S = #{out := Out, con := Cs}, Conn, AnswerPack) ->
   end,
   NewOut = NewOutFun(NewOutFun, AnswerPack, Out),
   NewCs  = lists:delete(Conn, Cs),
-  unlink(Conn),
   {noreply, S#{out := NewOut, con := NewCs}, 0}.
 
 
@@ -185,7 +184,6 @@ ret_(S = #{out := Out, con := Cs, ini := Ini, fre := Fre}, From, Conn) ->
 %% Stop connection due rotate time
 stp_(S = #{con := Cs, fre := Fre}, Conn) ->
   %% TODO delete from queues
-  unlink(Conn),
   {noreply, S#{con := lists:delete(Conn, Cs), fre := lists:delete(Conn, Fre)}, 0}.
 
 

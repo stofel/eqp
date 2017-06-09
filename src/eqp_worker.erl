@@ -41,7 +41,8 @@ init(_Args = #{qp_name := QPName, start := {M,F,A}, stop := MFA2}) ->
   end.
 
 %
-terminate(_Reason, #{stop  := {M, F, A}, conn  := C}) ->
+terminate(_Reason, #{qp_name := QPName, stop := {M, F, A}, conn := C}) ->
+  unlink(erlang:whereis(QPName)),
   apply(M, F, [C|A]),
   ok.
 
