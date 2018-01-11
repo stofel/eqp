@@ -193,13 +193,6 @@ stp_(S = #{con := Cs, fre := Fre}, Conn) ->
 timeout_(S) ->
   Now = ?mnow,
 
-  %% Manage in queue
-  InQFun = fun
-    (_F, AccS = #{in  := []}) -> try_advance(AccS, Now); 
-    (Fu, AccS)                -> try_send(AccS, Now)
-  end,
-
-
   %% Manage out queue
   OutQFun = fun
     %% Timeouted request
@@ -215,8 +208,9 @@ timeout_(S) ->
     (Fu, AccS = #{out := [{U,adv,Conn}|Rest], ini := Ini}) when U =< Now ->
         ?INF("timeout_conn", Rest),
         Fu(Fu, AccS#{out := Rest, ini := lists:delete(Conn, Ini)});
-    (_F, AccS) -> 
-        InQFun(InQFun, AccS)
+    %% Manage in queue
+    (_F, AccS = #{in  := []}) -> try_advance(AccS, Now);
+    (_F, AccS)                -> try_send(AccS, Now)
   end,
 
   %?INF("timeout", Fre),
