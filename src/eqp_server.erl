@@ -69,6 +69,7 @@ code_change(_OldVersion, State, _Extra) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% infos
 handle_info(timeout, State)         -> timeout_(State);
+handle_info({'EXIT',Pid,R}, State)  -> somebody_exit_(State, Pid, R);
 handle_info(Msg, S)                 -> ?INF("Unk msg:", Msg), {noreply, S, 0}.
 %% casts                          
 handle_cast({ans_ret, Conn, A}, S)  -> ans_ret_(S, Conn, A);
@@ -219,7 +220,18 @@ timeout_(S) ->
      NewS                             -> {noreply, NewS, 100*1000}
   end.
 
-
+%%
+somebody_exit_(S = #{fre := Fre, con := Con, ini := Ini}, Pid, Reason) ->
+  case lists:member(Pid, Con) of true -> ?INF("Close conn", {Pid, Reason}); false -> do_nothing end,
+  case lists:member(Pid, Ini) of true -> ?INF("Close init", {Pid, Reason}); false -> do_nothing end,
+  case lists:member(Pid, Fre) of true -> ?INF("Close free", {Pid, Reason}); false -> do_nothing end,
+  NewS = S#{
+    con := lists:delete(Pid, Con),
+    fre := lists:delete(Pid, Fre),
+    ini := lists:delete(Pid, Ini)
+  },
+  {noreply, NewS, 0}. 
+  
 
   
 
@@ -229,8 +241,10 @@ timeout_(S) ->
 try_send(S = #{in := In, fre := [C|RestFree], con := Cs, ini := Ini}, Now) ->
   PoolSize = length(Cs) + length(Ini),
   QLen     = length(In),
-  PackLen  = trunc(QLen/PoolSize)+1,
+  Pack     = trunc(QLen/PoolSize)+1,
+  PackLen  = min(?IF(Pack =< ?MAX_PACK_SIZE, Pack, ?MAX_PACK_SIZE), QLen),
   {P, RIn} = lists:split(?IF(PackLen =< ?MAX_PACK_SIZE, PackLen, ?MAX_PACK_SIZE), In),
+
   %% Send pack
   gen_server:cast(C, {pack, P}),
   NewS = S#{in := RIn, fre := RestFree},
