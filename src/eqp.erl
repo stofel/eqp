@@ -19,12 +19,12 @@
 -export_type([err/0]).
 
 t(1) -> 
-  % {ok, C} = epgsql:connect("localhost", "general", "Maf6eepiecai", [{database, "puzzles"}, {timeout, 4000}]),
+  % {ok, C} = epgsql:connect("localhost", "general", "1234", [{database, "puzzles"}, {timeout, 4000}]),
   % ...
   % ok = epgsql:close(C).
   %
   QPName = test_qp,
-  MFA1   = {epgsql, connect, ["localhost", "general", "Maf6eepiecai", [{database, "puzzles"}, {timeout, 4000}]]},
+  MFA1   = {epgsql, connect, ["localhost", "general", "1234", [{database, "puzzles"}, {timeout, 4000}]]},
   MFA2   = {epgsql, close, []},
   Args   = #{
       start => MFA1, 
