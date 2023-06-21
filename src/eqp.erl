@@ -42,7 +42,7 @@ t(3) ->
 
 
 %
--spec create(QPName::atom(), Args::map()) -> ok | err().
+-spec create(QPName::atom(), Args::map()) -> ok | {ok, pid()} | err().
 create(QPName, Args) -> 
   Child = #{id        => QPName,
             start     => {eqp_server, start_link, [QPName, Args]},
@@ -51,8 +51,13 @@ create(QPName, Args) ->
             type      => worker,
             modules   => [eqp_server]},
   case supervisor:start_child(eqp_sup, Child) of
-    {ok, _Pid} -> ok;
-    Else       -> Else
+    {ok, Pid} ->
+      case QPName == not_register of
+        true -> {ok, Pid}
+        false -> ok
+      end;
+    Else ->
+      Else
   end.
 
 
