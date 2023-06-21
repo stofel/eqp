@@ -30,7 +30,7 @@ create(QPName, Args) ->
   case supervisor:start_child(eqp_sup, Child) of
     {ok, Pid} ->
       case QPName == not_register of
-        true -> {ok, Pid}
+        true -> {ok, Pid};
         false -> ok
       end;
     Else ->
