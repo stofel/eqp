@@ -19,12 +19,12 @@
 -define(CONN_MAX_REQ, 20000). % max requests due rotation
 
 
-init(_Args = #{qp_name := QPName, start := {M,F,A}, stop := MFA2}) ->
+init(_Args = #{qp_pid := QPPid, start := {M,F,A}, stop := MFA2}) ->
   %process_flag(trap_exit, true),
   case apply(M,F,A) of
     {ok, C} ->
       Now = ?now,
-      S = #{qp_name => QPName,  %% QPName
+      S = #{qp_pid  => QPPid,  %% QPPid
             start   => {M,F,A}, %%
             stop    => MFA2,    %%
             pack    => [],      %% Pack of requests
@@ -33,7 +33,7 @@ init(_Args = #{qp_name := QPName, start := {M,F,A}, stop := MFA2}) ->
             idle    => 50000,   %% ms? idle timeout
             until   => Now + 300 + rand:uniform(100), %% sec worker time to live until
             init    => Now},   %% Init time
-      link(erlang:whereis(QPName)),
+      link(QPPid));
       {ok, S};
     Else ->
       ?INF("Connect error", Else),
@@ -41,8 +41,8 @@ init(_Args = #{qp_name := QPName, start := {M,F,A}, stop := MFA2}) ->
   end.
 
 %
-terminate(_Reason, #{qp_name := QPName, stop := {M, F, A}, conn := C}) ->
-  unlink(erlang:whereis(QPName)),
+terminate(_Reason, #{qp_pid := QPPid, stop := {M, F, A}, conn := C}) ->
+  unlink(QPPid)
   apply(M, F, [C|A]),
   ok.
 
@@ -73,17 +73,17 @@ pack_(S = #{pack := Pack}, AddPack) ->
 
 
 %
-timeout_(S = #{pack := [], qp_name := QPName, until := U, count := Count, idle := Timeout}) ->
+timeout_(S = #{pack := [], qp_pid := QPPid, until := U, count := Count, idle := Timeout}) ->
   %% If conn work too long or manage too many requests, close it
   case stop_or_not(Count, U) of
-    true  -> gen_server:cast(QPName, {stp, self()}), {stop, normal, S};
+    true  -> gen_server:cast(QPPid, {stp, self()}), {stop, normal, S};
     false -> {noreply, S, Timeout}
   end;
 
 
 %
-timeout_(S = #{pack := Pack, qp_name := QPName, conn := C, count := Count, until := U, idle := Timeout}) ->
-  %% Do pack and send answers to QPName
+timeout_(S = #{pack := Pack, qp_pid := QPPid, conn := C, count := Count, until := U, idle := Timeout}) ->
+  %% Do pack and send answers to QPPid
   SendFun = fun
     (Fu, [{From, {Req, Params}}|RestPack], AnswerAcc) ->
         Answer = epgsql:equery(C, Req, Params),
@@ -94,8 +94,8 @@ timeout_(S = #{pack := Pack, qp_name := QPName, conn := C, count := Count, until
     (_F, [], AnswerAcc) -> 
         NewCount = Count + length(AnswerAcc),
         case stop_or_not(NewCount, U) of
-          false -> gen_server:cast(QPName, {ans_ret, self(), lists:reverse(AnswerAcc)}), {ans_ret, NewCount};
-          true  -> gen_server:cast(QPName, {ans_stp, self(), lists:reverse(AnswerAcc)}),  ans_stp
+          false -> gen_server:cast(QPPid, {ans_ret, self(), lists:reverse(AnswerAcc)}), {ans_ret, NewCount};
+          true  -> gen_server:cast(QPPid, {ans_stp, self(), lists:reverse(AnswerAcc)}),  ans_stp
         end
   end,
   case SendFun(SendFun, Pack, []) of

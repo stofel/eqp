@@ -28,7 +28,7 @@
 
 %
 start_link(not_register, Args) -> 
-  gen_server:start_link(?MODULE, Args#{qp_name => QPName}, []);
+  gen_server:start_link(?MODULE, Args#{qp_name => not_register}, []);
 start_link(QPName, Args) when is_atom(QPName) -> 
   gen_server:start_link({local, QPName}, ?MODULE, Args#{qp_name => QPName}, []);
 start_link(_, _) -> 
@@ -281,13 +281,14 @@ try_advance(S = #{ini := Ini, con := Cs,  fre := Fre,
 -define(INIT_TIMEOUT, 5000).
 start_worker(S, 0, _) -> 
   S;
-start_worker(S = #{qp_name := QPName, start := MFA1, stop := MFA2}, WorkersToAddNum, Now) ->
-  WorkerArgs = #{qp_name => QPName,
-                 start   => MFA1,
-                 stop    => MFA2},
+start_worker(S = #{start := MFA1, stop := MFA2}, WorkersToAddNum, Now) ->
+  QPPid = self(),
+  WorkerArgs = #{qp_pid => QPPid,
+                 start  => MFA1,
+                 stop   => MFA2},
   StartWorkerFun = fun() -> 
       case gen_server:start(eqp_worker, WorkerArgs, []) of 
-        {ok, Pid} -> gen_server:cast(QPName, {ret, self(), Pid});
+        {ok, Pid} -> gen_server:cast(QPPid, {ret, self(), Pid});
         Else      -> ?INF("Start worker err", Else), do_nothing
       end
     end,
