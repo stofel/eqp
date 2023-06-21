@@ -33,7 +33,7 @@ init(_Args = #{qp_pid := QPPid, start := {M,F,A}, stop := MFA2}) ->
             idle    => 50000,   %% ms? idle timeout
             until   => Now + 300 + rand:uniform(100), %% sec worker time to live until
             init    => Now},   %% Init time
-      link(QPPid));
+      link(QPPid),
       {ok, S};
     Else ->
       ?INF("Connect error", Else),
@@ -42,7 +42,7 @@ init(_Args = #{qp_pid := QPPid, start := {M,F,A}, stop := MFA2}) ->
 
 %
 terminate(_Reason, #{qp_pid := QPPid, stop := {M, F, A}, conn := C}) ->
-  unlink(QPPid)
+  unlink(QPPid),
   apply(M, F, [C|A]),
   ok.
 
