@@ -27,7 +27,7 @@
 
 
 %
-start_link(not_register, Args) when is_atom(QPName) -> 
+start_link(not_register, Args) -> 
   gen_server:start_link(?MODULE, Args#{qp_name => QPName}, []);
 start_link(QPName, Args) when is_atom(QPName) -> 
   gen_server:start_link({local, QPName}, ?MODULE, Args#{qp_name => QPName}, []);
