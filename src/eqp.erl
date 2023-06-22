@@ -21,13 +21,7 @@
 %
 -spec create(QPName::not_register|atom(), Args::map()) -> ok | {ok, pid()} | err().
 create(QPName, Args) -> 
-  Child = #{id        => QPName,
-            start     => {eqp_server, start_link, [QPName, Args]},
-            restart   => permanent,
-            shutdown  => 10000,
-            type      => worker,
-            modules   => [eqp_server]},
-  case supervisor:start_child(eqp_sup, Child) of
+  case supervisor:start_child(eqp_sup, [QPName, Args]) of
     {ok, Pid} ->
       case QPName == not_register of
         true -> {ok, Pid};
@@ -36,7 +30,6 @@ create(QPName, Args) ->
     Else ->
       Else
   end.
-
 
 %
 delete(QPName) -> 
