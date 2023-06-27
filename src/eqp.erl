@@ -9,7 +9,7 @@
     stat/1,
     stat/0,
 
-    req/2,
+    req/2, req/3,
 
     update/3
   ]).
@@ -19,13 +19,23 @@
 
 
 %
--spec create(QPName::not_register|atom(), Args::map()) -> ok | {ok, pid()} | err().
+-spec create(QPName::{not_register, term()}|atom(), Args::map()) -> ok | {ok, pid()} | err().
 create(QPName, Args) -> 
-  case supervisor:start_child(eqp_sup, [QPName, Args]) of
+  {IsRegister, Id} = case QPName of
+    {not_register, Term} -> {false, Term};
+    Atom when is_atom(Atom) -> {true, Atom}
+  end,
+  Child = #{id        => Id,
+            start     => {eqp_server, start_link, [QPName, Args]},
+            restart   => permanent,
+            shutdown  => 10000,
+            type      => worker,
+            modules   => [eqp_server]},
+  case supervisor:start_child(eqp_sup, Child) of
     {ok, Pid} ->
-      case QPName == not_register of
-        true -> {ok, Pid};
-        false -> ok
+      case IsRegister of
+        true -> ok;
+        false -> {ok, Pid}
       end;
     Else ->
       Else
@@ -40,18 +50,27 @@ delete(QPName) ->
 
 %
 list() ->
-  [Name || {Name,_,_,_} <- supervisor:which_children(eqp_sup)].
+  [{Name, Pid} || {Name,Pid,_,_} <- supervisor:which_children(eqp_sup)].
 
 %
 stat() -> 
   list().
+stat(QPPid) when is_pid(QPPid) ->
+  gen_server:call(QPPid, stat);
 stat(QPName) ->
-  gen_server:call(QPName, stat).
+  case [Pid || {Name,Pid,_,_} <- supervisor:which_children(eqp_sup), Name == QPName] of
+    [Pid] when is_pid(Pid) -> gen_server:call(Pid, stat);
+    _ -> ?e(not_exists)
+  end.
 
 
 %
-req(QPName, Req) -> 
-  try gen_server:call(QPName, {req, Req}, 8000)
+req(QPPid, Req) ->
+  req(QPPid, Req, 8000).
+req(QPPid, {Req, []}, Timeout) -> 
+  req(QPPid, Req, Timeout);
+req(QPPid, Req, Timeout) -> 
+  try gen_server:call(QPPid, {req, Req}, Timeout)
   catch
     E:R -> 
       ?INF("req err", {E,R}), 

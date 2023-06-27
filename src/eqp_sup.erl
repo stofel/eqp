@@ -28,15 +28,8 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-    SupFlags = #{strategy => simple_one_for_one, intensity => 100, period => 1},
-    ChildSpecs = #{
-      id       => eqp,
-      start    => {eqp_server, start_link, []},
-      restart  => permanent,
-      shutdown => 10000,
-      type     => worker,
-      modules  => [eqp_server]
-    },
+    SupFlags = #{strategy => one_for_one, intensity => 100, period => 1},
+    ChildSpecs = [],
     {ok, {SupFlags, ChildSpecs}}.
 
 %%====================================================================

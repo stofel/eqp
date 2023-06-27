@@ -21,7 +21,7 @@
 
 init(_Args = #{qp_pid := QPPid, start := {M,F,A}, stop := MFA2}) ->
   %process_flag(trap_exit, true),
-  case apply(M,F,A) of
+  try apply(M,F,A) of
     {ok, C} ->
       Now = ?now,
       S = #{qp_pid  => QPPid,  %% QPPid
@@ -38,6 +38,9 @@ init(_Args = #{qp_pid := QPPid, start := {M,F,A}, stop := MFA2}) ->
     Else ->
       ?INF("Connect error", Else),
       Else
+    catch
+      E:R:T ->
+        ?e(crash, #{E => R, t => T})
   end.
 
 %
@@ -86,10 +89,10 @@ timeout_(S = #{pack := Pack, qp_pid := QPPid, conn := C, count := Count, until :
   %% Do pack and send answers to QPPid
   SendFun = fun
     (Fu, [{From, {Req, Params}}|RestPack], AnswerAcc) ->
-        Answer = epgsql:equery(C, Req, Params),
+        Answer = catch epgsql:equery(C, Req, Params),
         Fu(Fu, RestPack, [{From, Answer}|AnswerAcc]);
     (Fu, [{From, Req}|RestPack], AnswerAcc) ->
-        Answer = epgsql:squery(C, Req),
+        Answer = catch epgsql:squery(C, Req),
         Fu(Fu, RestPack, [{From, Answer}|AnswerAcc]);
     (_F, [], AnswerAcc) -> 
         NewCount = Count + length(AnswerAcc),

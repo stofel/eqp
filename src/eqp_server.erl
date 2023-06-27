@@ -27,16 +27,16 @@
 
 
 %
-start_link(not_register, Args) -> 
-  gen_server:start_link(?MODULE, Args#{qp_name => not_register}, []);
-start_link(QPName, Args) when is_atom(QPName) -> 
+start_link({not_register, QPName}, Args) ->
+  gen_server:start_link(?MODULE, Args#{qp_name => QPName}, []);
+start_link(QPName, Args) when is_atom(QPName) ->
   gen_server:start_link({local, QPName}, ?MODULE, Args#{qp_name => QPName}, []);
 start_link(_, _) -> 
   {error, wrong_args}.
 
 
+
 init(Args = #{qp_name := QPName, start := MFA1, stop := MFA2}) ->
-  ?INF("init QP server", Args),
   process_flag(trap_exit, true),
 
   S = #{qp_name => QPName,        %% QPName
