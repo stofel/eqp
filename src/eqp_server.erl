@@ -38,7 +38,9 @@ start_link(_, _) ->
 
 init(Args = #{qp_name := QPName, start := MFA1, stop := MFA2}) ->
   process_flag(trap_exit, true),
-
+  %% Reconnection strategy. Default: do_nothing if more than 5 conn timeouts in 20 sec
+  DefaultRecon = #{period => 30, threshold => 3, do => do_nothing}, %do = do_nothing | stop
+  Recon = maps:get(recon, Args, DefaultRecon),
   S = #{qp_name => QPName,        %% QPName
         %% Queue
         out     => ordsets:new(), %% Until timeout queue
@@ -52,6 +54,7 @@ init(Args = #{qp_name := QPName, start := MFA1, stop := MFA2}) ->
         ini     => [],            %% Pids spawned for init conns
         start   => MFA1,          %% MFA to start sub_worker process
         stop    => MFA2,          %% MFA to stop sub_worker process
+        recon   => Recon#{stack => []},
         %% stat
         rcount  => 0,             %% request count
         rate    => eqp_mavg:new() %% mavg of requests
@@ -208,16 +211,17 @@ timeout_(S) ->
         ?INF("timeout_conn", Conn),
         Fu(Fu, AccS#{out := Rest, con := lists:delete(Conn, Cs)});
     %% Timeouted advance connection
-    (Fu, AccS = #{out := [{U,adv,Conn}|Rest], ini := Ini}) when U =< Now ->
-        ?INF("timeout_conn", Rest),
-        Fu(Fu, AccS#{out := Rest, ini := lists:delete(Conn, Ini)});
+    (Fu, AccS = #{out := [{U,adv,Conn}|Rest], ini := Ini, recon := Re}) when U =< Now ->
+        NewRe = recon(Re),
+        Fu(Fu, AccS#{out := Rest, ini := lists:delete(Conn, Ini), recon := NewRe});
     %% Manage in queue
     (_F, AccS = #{in  := []}) -> try_advance(AccS, Now);
     (_F, AccS)                -> try_send(AccS, Now)
   end,
 
-  %?INF("timeout", Fre),
   case OutQFun(OutQFun, S) of
+     NewS = #{recon := stop} -> %% Lost all processing requests
+      {stop, {shutdown, connects_timeout_threshold}, NewS};
      NewS = #{out := [{Until,_,_}|_]} -> {noreply, NewS, Until - Now};
      NewS                             -> {noreply, NewS, 100*1000}
   end.
@@ -233,7 +237,28 @@ somebody_exit_(S = #{fre := Fre, con := Con, ini := Ini}, Pid, Reason) ->
     ini := lists:delete(Pid, Ini)
   },
   {noreply, NewS, 0}. 
-  
+
+%%
+recon(Re) ->
+  Now = ?now,
+  #{
+    stack := Stack,
+    period := Period,
+    threshold := Threshold,
+    do := Do} = Re,
+  BorgerTime = Now - Period,
+  NewStack = [Now | [T || T <- Stack, T >= BorgerTime]],
+  case length(NewStack) >= Threshold of
+    true ->
+      case Do of
+        stop ->
+          stop;
+        do_nothing ->
+          Re#{stack := []}
+      end;
+    false ->
+      Re#{stack := NewStack}
+  end.
 
   
 
@@ -289,7 +314,7 @@ start_worker(S = #{start := MFA1, stop := MFA2}, WorkersToAddNum, Now) ->
   StartWorkerFun = fun() -> 
       case gen_server:start(eqp_worker, WorkerArgs, []) of 
         {ok, Pid} -> gen_server:cast(QPPid, {ret, self(), Pid});
-        Else      -> ?INF("Start worker err", Else), do_nothing
+        _Else      -> do_nothing
       end
     end,
   Start = fun
