@@ -88,9 +88,20 @@ timeout_(S = #{pack := [], qp_pid := QPPid, until := U, count := Count, idle := 
 timeout_(S = #{pack := Pack, qp_pid := QPPid, conn := C, count := Count, until := U, idle := Timeout}) ->
   %% Do pack and send answers to QPPid
   SendFun = fun
+    (Fu, [{From, {simple, Req}}|RestPack], AnswerAcc) ->
+        Answer = catch epgsql:squery(C, Req),
+        Fu(Fu, RestPack, [{From, Answer}|AnswerAcc]);
+    (Fu, [{From, {extended, Req, Params}}|RestPack], AnswerAcc) ->
+        Answer = catch epgsql:equery(C, Req, Params),
+        Fu(Fu, RestPack, [{From, Answer}|AnswerAcc]);
+    (Fu, [{From, {batch, Req, Params}}|RestPack], AnswerAcc) ->
+        Answer = catch epgsql:execute_batch(C, Req, Params),
+        Fu(Fu, RestPack, [{From, Answer}|AnswerAcc]);
+    %% short extended
     (Fu, [{From, {Req, Params}}|RestPack], AnswerAcc) ->
         Answer = catch epgsql:equery(C, Req, Params),
         Fu(Fu, RestPack, [{From, Answer}|AnswerAcc]);
+    %% short simple
     (Fu, [{From, Req}|RestPack], AnswerAcc) ->
         Answer = catch epgsql:squery(C, Req),
         Fu(Fu, RestPack, [{From, Answer}|AnswerAcc]);
